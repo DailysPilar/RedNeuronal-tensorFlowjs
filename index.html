@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predicción de Complicaciones</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        input {
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Predicción de Complicaciones</h1>
+    <div>
+        <label>Edad:</label><input type="number" id="edad"><br>
+        <label>IMC:</label><input type="number" id="imc"><br>
+        <label>Grado Desnutrición:</label><input type="number" id="gradodesnutricion"><br>
+        <label>Proteínas Totales:</label><input type="number" id="proteinasTotales"><br>
+        <label>Clasificación Cirugía:</label><input type="number" id="clasificacioncirugia"><br>
+      <button onclick="predecir()">Predecir</button>
+    </div>
+    <div id="resultado"></div>
+
+    <script>
+let datos = [];
+let etiquetas = [];
+let model=null;
+async function procesar() {
+  const nombreArchivo = 'dataset.txt';
+  try {
+    const response = await fetch(nombreArchivo);
+    if (!response.ok) {
+      throw new Error('Error al cargar el archivo');
+    }
+    const contenido = await response.text();
+    const lineas = contenido.split('\n');
+    lineas.forEach(linea => {
+      const elementos = linea.split(',');
+      if (elementos.length < 6) return;
+      const valores = elementos.slice(0, -1).map(Number);
+      const etiqueta = elementos[elementos.length - 1].trim() === 'SI' ? 1 : 0;
+      datos.push(valores);
+      etiquetas.push(etiqueta);
+    });
+    console.log('Datos:', datos);
+    console.log('Etiquetas:', etiquetas);
+  } catch (error) {
+    console.error('Error al leer el archivo:', error);
+  }
+}
+let ysTensor=null;
+async function crearmodelo() {
+  await procesar();
+  const xsTensor = tf.tensor2d(datos, [datos.length, datos[0].length]);
+  ysTensor = tf.tensor2d(etiquetas.map(e => [e]), [etiquetas.length, 1]);
+
+  model = tf.sequential();
+  model.add(tf.layers.dense({
+    units: 12,
+    inputShape: [5],
+    activation: 'relu',
+    kernelInitializer: tf.initializers.randomNormal({mean: 0, stddev: 0.1})
+  }));
+  model.add(tf.layers.dense({
+    units: 8,
+    activation: 'relu',
+    kernelInitializer: tf.initializers.randomNormal({mean: 0, stddev: 0.1})
+  }));
+  model.add(tf.layers.dense({ 
+    units: 4, 
+    activation: 'relu',
+    kernelInitializer: tf.initializers.randomNormal({mean: 0, stddev: 0.1})
+}));
+  model.add(tf.layers.dense({
+    units: 1,
+    activation: 'sigmoid'
+  }));
+  model.compile({
+    optimizer: tf.train.sgd(0.3),
+    loss: 'binaryCrossentropy'
+  });
+
+  const conf = { epochs: 200,validationSplit: 0.1, }; 
+  const entrenamiento = await model.fit(xsTensor, ysTensor, conf);
+  console.log(entrenamiento);
+}
+async function predecir() {
+  const entrada = [
+    parseFloat(document.getElementById('edad').value),
+    parseFloat(document.getElementById('imc').value),
+    parseFloat(document.getElementById('gradodesnutricion').value),
+    parseFloat(document.getElementById('proteinasTotales').value),
+    parseFloat(document.getElementById('clasificacioncirugia').value)
+  ];
+const entradaTensor = tf.tensor2d(datos);
+const resultadot = model.predict(entradaTensor);
+const resultadoRedondeado = resultadot.round();
+const resultadoValor = resultadoRedondeado.dataSync()[0];
+const prediccion = resultadoValor === 1 ? 'SI' : 'NO'
+document.getElementById('resultado').innerText = `Predicción: ${prediccion}`;
+}
+crearmodelo();
+</script>
+</body>
+</html>
